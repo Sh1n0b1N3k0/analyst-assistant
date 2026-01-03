@@ -1,4 +1,5 @@
 """API Gateway - единая точка входа для всех сервисов."""
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -12,16 +13,31 @@ from services.requirement_storage.api import router as requirement_storage_route
 from services.requirement_storage.supabase_api import router as requirement_storage_supabase_router
 from services.spec_generator.api import router as spec_generator_router
 from shared.supabase_config import SupabaseClient
+from shared.logging_config import get_logger, setup_logging
+from shared.exceptions import (
+    app_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+    general_exception_handler,
+    AppException,
+)
+from shared.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, LoggingMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
+
+# Настроить логирование
+setup_logging()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения."""
     # Startup
-    print("Starting API Gateway...")
+    logger.info("Starting API Gateway...")
     yield
     # Shutdown
-    print("Shutting down API Gateway...")
+    logger.info("Shutting down API Gateway...")
 
 
 app = FastAPI(
@@ -31,14 +47,27 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS
+# CORS - безопасная конфигурация
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-Process-Time", "X-RateLimit-Limit-Minute", "X-RateLimit-Remaining-Minute"],
 )
+
+# Добавить middleware
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=60, requests_per_hour=1000)
+
+# Обработчики исключений
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # Подключение роутеров сервисов
 app.include_router(project_admin_router)
@@ -47,7 +76,7 @@ app.include_router(knowledge_base_router)
 app.include_router(prompt_store_router)
 
 # Использовать Supabase API если доступен, иначе обычный PostgreSQL API
-if SUPABASE_AVAILABLE and SupabaseClient and SupabaseClient.is_available():
+if SupabaseClient and SupabaseClient.is_available():
     app.include_router(requirement_storage_supabase_router)
 else:
     app.include_router(requirement_storage_router)
