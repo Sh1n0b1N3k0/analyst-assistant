@@ -1,0 +1,755 @@
+@startuml
+' ER Diagram v1.4.1 — SRS + Architecture + Message Brokers + RBAC + Audit + Entities
+' + ADDED: RBAC (users, roles, permissions)
+' + ADDED: Change history and audit
+' + ADDED: Requirement relationships
+' + ADDED: Comments and discussions
+' + ADDED: Test cases
+' + ADDED: Documents and artifacts
+' + ADDED: Risks and issues
+' + ADDED: Metrics and KPIs
+' + ADDED: External systems
+' + ADDED: Deployments
+' + ADDED: Entities and entity relationships
+' + ADDED: Requirement-Entity links
+' + ADDED: Component-Entity links
+' + ADDED: UI-Entity links
+' + ENHANCED: Existing entities with additional fields
+' SemVer: v1.4.1
+
+title Software Requirements & Architecture Model — v1.4.1
+
+' Стиль
+skinparam linetype ortho
+skinparam wrapWidth 240
+skinparam defaultTextAlignment center
+skinparam entityBackgroundColor White
+skinparam entityBorderColor #2c3e50
+skinparam entityFontStyle bold
+
+' ============================================================================
+' === RBAC: Пользователи и права доступа ===
+' ============================================================================
+
+entity "users" as users {
+  * id : UUID <<PK>>
+  username : TEXT <<unique>>
+  email : TEXT <<unique>>
+  full_name : TEXT
+  hashed_password : TEXT
+  is_active : BOOLEAN
+  is_superuser : BOOLEAN
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+note right of users
+  Пользователи системы\n
+  Аутентификация и авторизация
+end note
+
+entity "roles" as roles {
+  * id : UUID <<PK>>
+  name : TEXT <<unique>>
+  description : TEXT
+  created_at : TIMESTAMPTZ
+}
+note right of roles
+  Роли пользователей\n
+  Группировка прав доступа
+end note
+
+entity "permissions" as perms {
+  * id : UUID <<PK>>
+  resource_type : TEXT <<not null>>
+  action : TEXT <<not null>>
+  description : TEXT
+  created_at : TIMESTAMPTZ
+}
+note right of perms
+  Права доступа\n
+  resource_type: requirement, component, ui_element, etc.\naction: create, read, update, delete, approve
+end note
+
+entity "user_roles" as ur {
+  * user_id : UUID <<FK PK>>
+  * role_id : UUID <<FK PK>>
+  assigned_at : TIMESTAMPTZ
+}
+
+entity "role_permissions" as rp {
+  * role_id : UUID <<FK PK>>
+  * permission_id : UUID <<FK PK>>
+}
+
+' ============================================================================
+' === Проект ===
+' ============================================================================
+
+entity "projects" as proj {
+  * id : UUID <<PK>>
+  name : TEXT <<not null>>
+  description : TEXT
+  methodology : TEXT <<enum>>
+  start_date : DATE
+  end_date : DATE
+  status : TEXT <<enum>>
+  owner_id : UUID <<FK>>
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+note right of proj
+  Проекты\n
+  Контекст для всех артефактов: стандарт, сроки, участники
+end note
+
+' ============================================================================
+' === Требования ===
+' ============================================================================
+
+entity "requirements" as req {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  identifier : TEXT <<PK, unique>>
+  name : TEXT <<not null>>
+  shall : TEXT <<not null>>
+  rationale : TEXT <<not null>>
+  verification_method : TEXT <<not null>>
+  status : TEXT <<enum>>
+  category : TEXT <<enum>>  -- functional, non_functional, business, technical
+  priority : INT  -- 1-5
+  source : TEXT  -- stakeholder, regulation, etc.
+  acceptance_criteria : TEXT[]
+  tags : TEXT[]
+  estimated_effort : NUMERIC
+  actual_effort : NUMERIC
+  due_date : DATE
+  assigned_to_id : UUID <<FK>>
+  version : INT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+  updated_by_id : UUID <<FK>>
+}
+note right of req
+  Требования\n
+  Атомарные формулировки по ISO/IEC/IEEE 29148
+end note
+
+' ============================================================================
+' === Связи между требованиями ===
+' ============================================================================
+
+entity "requirement_relationships" as req_rel {
+  * id : UUID <<PK>>
+  from_requirement_id : UUID <<FK>>
+  to_requirement_id : UUID <<FK>>
+  relationship_type : TEXT <<enum>>  -- depends_on, conflicts_with, duplicates, refines, replaces, related_to
+  description : TEXT
+  created_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+}
+note right of req_rel
+  Связи между требованиями\n
+  Зависимости, конфликты, дубликаты, уточнения
+end note
+
+' ============================================================================
+' === Функции системы ===
+' ============================================================================
+
+entity "system_capabilities" as cap {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  name : TEXT <<not null>>
+  description : TEXT
+  business_value : TEXT
+  status : TEXT <<enum>>
+  version : INT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+  updated_by_id : UUID <<FK>>
+}
+note right of cap
+  Функции системы\n
+  Логические возможности, группирующие требования
+end note
+
+' ============================================================================
+' === Пользовательские интерфейсы ===
+' ============================================================================
+
+entity "ui_elements" as ui {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  name : TEXT <<not null>>
+  type : TEXT <<enum>>
+  description : TEXT
+  capability_id : UUID <<FK>>
+  parent_id : UUID <<FK>>
+  prototype_url : TEXT
+  wireframe_url : TEXT
+  accessibility_level : TEXT <<enum>>  -- WCAG levels
+  responsive_breakpoints : JSONB
+  user_roles : TEXT[]
+  status : TEXT <<enum>>
+  version : INT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+  updated_by_id : UUID <<FK>>
+}
+note right of ui
+  Элементы интерфейса\n
+  Экраны, формы, поля — с иерархией и прототипами
+end note
+
+' ============================================================================
+' === Системные компоненты ===
+' ============================================================================
+
+entity "system_components" as comp {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  name : TEXT <<not null>>
+  type : component_type <<enum>>
+  description : TEXT
+  tech_stack : TEXT[]
+  parent_component_id : UUID <<FK>>
+  system_capability_id : UUID <<FK>>
+  status : TEXT <<enum>>
+  health_status : TEXT <<enum>>  -- healthy, degraded, down
+  last_health_check : TIMESTAMPTZ
+  monitoring_url : TEXT
+  metrics_endpoint : TEXT
+  logs_url : TEXT
+  deployment_config : JSONB
+  environment_variables : JSONB
+  resource_limits : JSONB
+  version : TEXT
+  docs_url : TEXT
+  source_code_url : TEXT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+  updated_by_id : UUID <<FK>>
+}
+note right of comp
+  Системные компоненты\n
+  Реализации функций: сервисы, модули, БД, фронтенд
+end note
+
+' ============================================================================
+' === Зависимости компонентов ===
+' ============================================================================
+
+entity "component_dependencies" as comp_dep {
+  * id : UUID <<PK>>
+  from_component_id : UUID <<FK>>
+  to_component_id : UUID <<FK>>
+  type : dependency_type <<enum>>
+  protocol : TEXT
+  interface : TEXT
+  is_critical : BOOLEAN
+  timeout : INT
+  retry_policy : JSONB
+  circuit_breaker : BOOLEAN
+  monitoring_enabled : BOOLEAN
+  created_at : TIMESTAMPTZ
+}
+note right of comp_dep
+  Зависимости компонентов\n
+  Взаимодействия: вызовы, события, чтение/запись данных
+end note
+
+' ============================================================================
+' === Трассировка компонент ↔ требования ===
+' ============================================================================
+
+entity "component_requirement_links" as comp_req {
+  * component_id : UUID <<FK PK>>
+  * requirement_id : UUID <<FK PK>>
+  implementation_detail : TEXT
+  coverage_level : TEXT
+  created_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+}
+note right of comp_req
+  Реализация требований\n
+  Как компонент удовлетворяет конкретному требованию
+end note
+
+' ============================================================================
+' === Трассировка компонент ↔ UI ===
+' ============================================================================
+
+entity "component_ui_links" as comp_ui {
+  * component_id : UUID <<FK PK>>
+  * ui_element_id : UUID <<FK PK>>
+  interaction : TEXT
+  created_at : TIMESTAMPTZ
+}
+note right of comp_ui
+  Взаимодействие UI-компонент\n
+  Как интерфейс общается с бэкенд-компонентами
+end note
+
+' ============================================================================
+' === Детали брокера сообщений ===
+' ============================================================================
+
+entity "message_broker_details" as mb {
+  * component_id : UUID <<FK PK>>
+  broker_type : TEXT <<enum>>
+  cluster_name : TEXT
+  namespace : TEXT
+  topics : JSONB
+  queues : JSONB
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+note right of mb
+  Параметры брокера\n
+  Топики, очереди, настройки кластера для Kafka/RabbitMQ
+end note
+
+' ============================================================================
+' === История изменений и аудит ===
+' ============================================================================
+
+entity "change_history" as ch {
+  * id : UUID <<PK>>
+  entity_type : TEXT <<not null>>  -- requirement, component, ui_element, etc.
+  entity_id : UUID <<not null>>
+  action : TEXT <<enum>>  -- created, updated, deleted, status_changed
+  old_values : JSONB
+  new_values : JSONB
+  changed_by_id : UUID <<FK>>
+  changed_at : TIMESTAMPTZ
+  comment : TEXT
+}
+note right of ch
+  История изменений\n
+  Полный аудит всех изменений артефактов
+end note
+
+' ============================================================================
+' === Комментарии и обсуждения ===
+' ============================================================================
+
+entity "comments" as comments {
+  * id : UUID <<PK>>
+  entity_type : TEXT <<not null>>  -- requirement, component, ui_element
+  entity_id : UUID <<not null>>
+  parent_comment_id : UUID <<FK>>  -- для вложенных комментариев
+  content : TEXT <<not null>>
+  created_by_id : UUID <<FK>>
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  is_resolved : BOOLEAN
+}
+note right of comments
+  Комментарии\n
+  Обсуждения и комментарии к артефактам
+end note
+
+' ============================================================================
+' === Тест-кейсы и верификация ===
+' ============================================================================
+
+entity "test_cases" as tests {
+  * id : UUID <<PK>>
+  requirement_id : UUID <<FK>>
+  component_id : UUID <<FK>>
+  name : TEXT <<not null>>
+  description : TEXT
+  test_type : TEXT <<enum>>  -- unit, integration, e2e, performance, security
+  status : TEXT <<enum>>  -- not_run, passed, failed, blocked
+  execution_date : TIMESTAMPTZ
+  executed_by_id : UUID <<FK>>
+  test_result : JSONB
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+note right of tests
+  Тест-кейсы\n
+  Верификация требований и компонентов
+end note
+
+' ============================================================================
+' === Документация и артефакты ===
+' ============================================================================
+
+entity "documents" as docs {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  entity_type : TEXT  -- requirement, component, ui_element
+  entity_id : UUID
+  name : TEXT <<not null>>
+  document_type : TEXT <<enum>>  -- spec, diagram, api_doc, user_guide
+  file_path : TEXT
+  file_url : TEXT
+  content : TEXT
+  version : INT
+  created_by_id : UUID <<FK>>
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+note right of docs
+  Документация\n
+  Спецификации, диаграммы, API документация
+end note
+
+' ============================================================================
+' === Риски и проблемы ===
+' ============================================================================
+
+entity "risks" as risks {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  requirement_id : UUID <<FK>>
+  component_id : UUID <<FK>>
+  title : TEXT <<not null>>
+  description : TEXT
+  risk_level : TEXT <<enum>>  -- low, medium, high, critical
+  probability : INT  -- 1-5
+  impact : INT  -- 1-5
+  mitigation_strategy : TEXT
+  status : TEXT <<enum>>  -- open, mitigated, accepted, closed
+  created_by_id : UUID <<FK>>
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+note right of risks
+  Риски и проблемы\n
+  Трекинг рисков и проблем проекта
+end note
+
+' ============================================================================
+' === Метрики и KPI ===
+' ============================================================================
+
+entity "metrics" as metrics {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  metric_type : TEXT <<enum>>  -- requirement_coverage, test_coverage, component_health
+  entity_type : TEXT
+  entity_id : UUID
+  value : NUMERIC
+  target_value : NUMERIC
+  unit : TEXT
+  measured_at : TIMESTAMPTZ
+  created_at : TIMESTAMPTZ
+}
+note right of metrics
+  Метрики и KPI\n
+  Отслеживание метрик выполнения требований
+end note
+
+' ============================================================================
+' === Внешние системы и интеграции ===
+' ============================================================================
+
+entity "external_systems" as ext_sys {
+  * id : UUID <<PK>>
+  component_id : UUID <<FK>>
+  name : TEXT <<not null>>
+  system_type : TEXT  -- API, database, service
+  endpoint_url : TEXT
+  authentication_type : TEXT
+  api_version : TEXT
+  documentation_url : TEXT
+  status : TEXT <<enum>>  -- active, deprecated, unavailable
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+note right of ext_sys
+  Внешние системы\n
+  Детали внешних систем и интеграций
+end note
+
+' ============================================================================
+' === Развертывание и окружения ===
+' ============================================================================
+
+entity "deployments" as depl {
+  * id : UUID <<PK>>
+  component_id : UUID <<FK>>
+  environment : TEXT <<enum>>  -- development, staging, production
+  version : TEXT
+  deployed_at : TIMESTAMPTZ
+  deployed_by_id : UUID <<FK>>
+  status : TEXT <<enum>>  -- success, failed, rolling_back
+  deployment_url : TEXT
+  created_at : TIMESTAMPTZ
+}
+note right of depl
+  Развертывание\n
+  Информация о развертывании компонентов
+end note
+
+' ============================================================================
+' === Сущности системы ===
+' ============================================================================
+
+entity "entities" as entities {
+  * id : UUID <<PK>>
+  project_id : UUID <<FK>>
+  name : TEXT <<not null>>
+  entity_type : TEXT <<enum>>  -- actor, data_object, business_process, external_system, resource
+  description : TEXT
+  attributes : JSONB  -- Атрибуты сущности
+  status : TEXT <<enum>>
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+  updated_by_id : UUID <<FK>>
+}
+note right of entities
+  Сущности системы\n
+  Акторы, объекты данных, бизнес-процессы,\nвнешние системы, ресурсы
+end note
+
+' ============================================================================
+' === Связи между сущностями ===
+' ============================================================================
+
+entity "entity_relationships" as ent_rel {
+  * id : UUID <<PK>>
+  from_entity_id : UUID <<FK>>
+  to_entity_id : UUID <<FK>>
+  relationship_type : TEXT <<enum>>  -- uses, creates, reads, updates, deletes, triggers, belongs_to, contains
+  description : TEXT
+  created_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+}
+note right of ent_rel
+  Связи между сущностями\n
+  Взаимодействия: использует, создает, читает,\nобновляет, удаляет, триггерит
+end note
+
+' ============================================================================
+' === Связь требований с сущностями ===
+' ============================================================================
+
+entity "requirement_entities" as req_ent {
+  * requirement_id : UUID <<FK PK>>
+  * entity_id : UUID <<FK PK>>
+  involvement_type : TEXT <<enum>>  -- primary, secondary, affected, stakeholder
+  description : TEXT
+  created_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+}
+note right of req_ent
+  Связь требований с сущностями\n
+  Какие сущности участвуют в требовании
+end note
+
+' ============================================================================
+' === Связь компонентов с сущностями ===
+' ============================================================================
+
+entity "component_entities" as comp_ent {
+  * component_id : UUID <<FK PK>>
+  * entity_id : UUID <<FK PK>>
+  interaction_type : TEXT <<enum>>  -- manages, processes, stores, exposes, consumes
+  description : TEXT
+  created_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+}
+note right of comp_ent
+  Связь компонентов с сущностями\n
+  Как компонент взаимодействует с сущностями
+end note
+
+' ============================================================================
+' === Связь UI элементов с сущностями ===
+' ============================================================================
+
+entity "ui_entity_links" as ui_ent {
+  * ui_element_id : UUID <<FK PK>>
+  * entity_id : UUID <<FK PK>>
+  display_type : TEXT <<enum>>  -- displays, edits, creates, deletes, filters
+  description : TEXT
+  created_at : TIMESTAMPTZ
+  created_by_id : UUID <<FK>>
+}
+note right of ui_ent
+  Связь UI элементов с сущностями\n
+  Как UI элемент отображает или работает с сущностью
+end note
+
+' ============================================================================
+' === ENUM-типы ===
+' ============================================================================
+
+entity "component_type" as ct <<enum>> {
+  microservice
+  library
+  database
+  api_gateway
+  frontend_app
+  batch_job
+  event_handler
+  external_system
+  message_broker
+}
+note right of ct
+  Типы компонентов\n
+  message_broker — Kafka, RabbitMQ, NATS и др.
+end note
+
+entity "dependency_type" as dt <<enum>> {
+  calls
+  publishes
+  subscribes
+  reads
+  writes
+  uses
+  deployed_with
+}
+note right of dt
+  Типы зависимостей\n
+  Семантика связей: вызов, событие, данные
+end note
+
+' ============================================================================
+' === Связи ===
+' ============================================================================
+
+' RBAC связи
+users ||--o{ ur : "user_id"
+roles ||--o{ ur : "role_id"
+roles ||--o{ rp : "role_id"
+perms ||--o{ rp : "permission_id"
+
+' Проект
+proj }o--|| users : "owner_id"
+proj ||--o{ comp : "project_id"
+proj ||--o{ req : "project_id"
+proj ||--o{ cap : "project_id"
+proj ||--o{ ui : "project_id"
+proj ||--o{ docs : "project_id"
+proj ||--o{ risks : "project_id"
+proj ||--o{ metrics : "project_id"
+
+' Требования
+req }o--|| users : "created_by_id"
+req }o--|| users : "updated_by_id"
+req }o--o| users : "assigned_to_id"
+req ||--o{ req_rel : "from_requirement_id"
+req ||--o{ req_rel : "to_requirement_id"
+req ||--o{ comp_req : "requirement_id"
+req ||--o{ tests : "requirement_id"
+req ||--o{ risks : "requirement_id"
+
+' Функции системы
+cap }o--|| users : "created_by_id"
+cap }o--|| users : "updated_by_id"
+cap ||--o{ comp : "system_capability_id"
+cap ||--o{ ui : "capability_id"
+
+' UI элементы
+ui }o--|| users : "created_by_id"
+ui }o--|| users : "updated_by_id"
+ui ||--o{ comp_ui : "ui_element_id"
+ui ||--o{ ui : "parent_id"
+
+' Компоненты
+comp }o--|| users : "created_by_id"
+comp }o--|| users : "updated_by_id"
+comp ||--o{ comp : "parent_component_id"
+comp ||--o{ comp_dep : "from_component_id"
+comp ||--o{ comp_dep : "to_component_id"
+comp ||--o{ comp_req : "component_id"
+comp ||--o{ comp_ui : "component_id"
+comp ||--o{ tests : "component_id"
+comp ||--o{ risks : "component_id"
+comp ||--o{ ext_sys : "component_id"
+comp ||--o{ depl : "component_id"
+comp ||--o{ mb : "component_id"
+
+' История изменений
+ch }o--|| users : "changed_by_id"
+
+' Комментарии
+comments }o--|| users : "created_by_id"
+comments ||--o{ comments : "parent_comment_id"
+
+' Тест-кейсы
+tests }o--|| users : "executed_by_id"
+
+' Документация
+docs }o--|| users : "created_by_id"
+
+' Риски
+risks }o--|| users : "created_by_id"
+
+' Развертывание
+depl }o--|| users : "deployed_by_id"
+
+' Связи требований
+req_rel }o--|| users : "created_by_id"
+
+' Реализация требований
+comp_req }o--|| users : "created_by_id"
+
+' Сущности
+entities }o--|| users : "created_by_id"
+entities }o--|| users : "updated_by_id"
+entities ||--o{ ent_rel : "from_entity_id"
+entities ||--o{ ent_rel : "to_entity_id"
+entities ||--o{ req_ent : "entity_id"
+entities ||--o{ comp_ent : "entity_id"
+entities ||--o{ ui_ent : "entity_id"
+
+' Связи сущностей
+ent_rel }o--|| users : "created_by_id"
+
+' Связь требований с сущностями
+req_ent }o--|| users : "created_by_id"
+req ||--o{ req_ent : "requirement_id"
+
+' Связь компонентов с сущностями
+comp_ent }o--|| users : "created_by_id"
+comp ||--o{ comp_ent : "component_id"
+
+' Связь UI элементов с сущностями
+ui_ent }o--|| users : "created_by_id"
+ui ||--o{ ui_ent : "ui_element_id"
+
+' Проект → Сущности
+proj ||--o{ entities : "project_id"
+
+' ============================================================================
+' === Примечания ===
+' ============================================================================
+
+note "comp_dep:\nauth-service → publishes → kafka-cluster" as N1
+comp_dep .. N1
+
+note "mb:\nkafka-cluster: topic=user.registered" as N2
+mb .. N2
+
+note "comp_req:\nemail-service реализует NFR-ASYNC-001" as N3
+comp .. N3
+
+note "req_rel:\nREQ-001 depends_on REQ-002" as N4
+req_rel .. N4
+
+note "ch:\nrequirement REQ-001: status changed draft → approved" as N5
+ch .. N5
+
+note "entities:\nUser (actor), Order (data_object), PaymentProcess (business_process)" as N6
+entities .. N6
+
+note "req_ent:\nREQ-001 involves User and Order entities" as N7
+req_ent .. N7
+
+note "comp_ent:\norder-service manages Order entity" as N8
+comp_ent .. N8
+
+note "ent_rel:\nUser creates Order, Order triggers PaymentProcess" as N9
+ent_rel .. N9
+
+@enduml

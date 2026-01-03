@@ -1,0 +1,50 @@
+# Упрощенная версия - только основные сервисы для быстрого старта
+# Использует стандартный PostgreSQL вместо полного стека Supabase
+
+version: '3.8'
+
+services:
+  # PostgreSQL (для основной БД)
+  postgres:
+    image: postgres:15-alpine
+    container_name: requirements_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: requirements_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/create_prompts_schema.sql:/docker-entrypoint-initdb.d/01_create_prompts_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Neo4j
+  neo4j:
+    image: neo4j:5.14
+    container_name: requirements_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_heap_max__size: 2G
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+
