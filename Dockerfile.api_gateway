@@ -5,14 +5,26 @@ WORKDIR /app
 # Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     postgresql-client \
+    libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Копирование requirements
-COPY requirements.txt .
+# Обновление pip
+RUN pip install --upgrade pip setuptools wheel
+
+# Копирование requirements (используем версию без тестов для production)
+COPY requirements-docker.txt requirements.txt
 
 # Установка Python зависимостей
-RUN pip install --no-cache-dir -r requirements.txt
+# Устанавливаем базовые пакеты сначала, затем остальные
+RUN pip install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn[standard]==0.24.0 \
+    pydantic==2.5.0 \
+    pydantic-settings==2.1.0 \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Копирование кода приложения
 COPY . .

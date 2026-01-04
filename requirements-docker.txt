@@ -1,3 +1,6 @@
+# Production requirements для Docker образа
+# Без тестовых зависимостей
+
 # Core dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -33,9 +36,4 @@ python-multipart==0.0.6
 httpx==0.25.2
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
-
-# Testing (опционально, можно исключить из production образа)
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
 
