@@ -39,8 +39,10 @@ services:
       - log_statement=all
 
   # Supabase Studio (UI для управления)
+  # Если latest не работает, попробуйте конкретную версию, например:
+  # image: supabase/studio:20231220-0a8b0c5
   supabase_studio:
-    image: supabase/studio:20240118-7c4c0a4
+    image: supabase/studio:latest
     container_name: requirements_supabase_studio
     restart: unless-stopped
     ports:
