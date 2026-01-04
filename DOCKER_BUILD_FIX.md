@@ -29,6 +29,28 @@ did not complete successfully: exit code: 1
 
 Отдельный файл зависимостей для Docker без тестовых пакетов.
 
+## Текущее решение
+
+Dockerfile теперь использует `requirements-docker.txt` (без тестовых зависимостей) и установку с verbose режимом для диагностики.
+
+### Если сборка все еще падает:
+
+1. **Используйте гибкие версии** - измените в Dockerfile:
+```dockerfile
+COPY requirements-docker-flexible.txt requirements.txt
+```
+
+2. **Или соберите с подробным выводом**:
+```bash
+docker-compose build --progress=plain --no-cache api_gateway
+```
+
+3. **Проверьте конкретный пакет**:
+```bash
+docker run --rm -it python:3.11-slim bash
+pip install <problematic-package>
+```
+
 ## Диагностика
 
 Если проблема сохраняется, выполните:
@@ -37,9 +59,11 @@ did not complete successfully: exit code: 1
 # Сборка с подробным выводом
 docker build --progress=plain --no-cache -t api_gateway -f Dockerfile.api_gateway .
 
-# Или проверьте конкретный пакет
-docker run --rm -it python:3.11-slim bash
-pip install <problematic-package>
+# Просмотр логов сборки
+docker-compose build api_gateway 2>&1 | tee build.log
+
+# Проверка последних ошибок
+tail -100 build.log | grep -i error
 ```
 
 ## Альтернативные решения

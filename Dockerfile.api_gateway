@@ -11,20 +11,19 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Обновление pip
+# Обновление pip и установка wheel для компиляции пакетов
 RUN pip install --upgrade pip setuptools wheel
 
-# Копирование requirements (используем версию без тестов для production)
+# Копирование requirements (используем версию без тестов)
 COPY requirements-docker.txt requirements.txt
 
 # Установка Python зависимостей
-# Устанавливаем базовые пакеты сначала, затем остальные
-RUN pip install --no-cache-dir \
-    fastapi==0.104.1 \
-    uvicorn[standard]==0.24.0 \
-    pydantic==2.5.0 \
-    pydantic-settings==2.1.0 \
-    && pip install --no-cache-dir -r requirements.txt
+# Используем --verbose для диагностики проблем
+RUN pip install --no-cache-dir --verbose -r requirements.txt || \
+    (echo "=== ERROR: Failed to install dependencies ===" && \
+     cat requirements.txt && \
+     pip list && \
+     exit 1)
 
 # Копирование кода приложения
 COPY . .
@@ -34,4 +33,3 @@ EXPOSE 8000
 
 # Запуск приложения
 CMD ["uvicorn", "api_gateway.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-
