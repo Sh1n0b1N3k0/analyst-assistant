@@ -31,24 +31,41 @@ did not complete successfully: exit code: 1
 
 ## Текущее решение
 
-Dockerfile теперь использует `requirements-docker.txt` (без тестовых зависимостей) и установку с verbose режимом для диагностики.
+Dockerfile теперь устанавливает пакеты по частям для лучшей диагностики:
+1. Базовые пакеты (FastAPI, Pydantic)
+2. Database пакеты
+3. Supabase пакеты
+4. Langchain пакеты (с fallback на гибкие версии)
+5. AI провайдеры
+6. Утилиты
+
+Это позволяет точно определить, какой пакет вызывает проблему.
 
 ### Если сборка все еще падает:
 
-1. **Используйте гибкие версии** - измените в Dockerfile:
-```dockerfile
-COPY requirements-docker-flexible.txt requirements.txt
-```
-
-2. **Или соберите с подробным выводом**:
+1. **Проверьте, на каком этапе падает сборка**:
 ```bash
-docker-compose build --progress=plain --no-cache api_gateway
+docker-compose build --progress=plain api_gateway 2>&1 | grep -A 10 "RUN pip"
 ```
+Это покажет, какой именно пакет вызывает проблему.
 
-3. **Проверьте конкретный пакет**:
+2. **Используйте упрощенный Dockerfile** (без langchain для диагностики):
+```bash
+docker build -f Dockerfile.api_gateway.simple -t api_gateway:simple .
+```
+Если упрощенная версия собирается, проблема в langchain пакетах.
+
+3. **Проверьте конкретный проблемный пакет**:
 ```bash
 docker run --rm -it python:3.11-slim bash
+pip install --upgrade pip setuptools wheel
 pip install <problematic-package>
+```
+
+4. **Попробуйте установить langchain без версий** (pip сам выберет совместимые):
+В Dockerfile замените langchain секцию на:
+```dockerfile
+RUN pip install --no-cache-dir langchain langchain-core langchain-community langchain-openai langchain-anthropic
 ```
 
 ## Диагностика
